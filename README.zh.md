@@ -78,7 +78,8 @@ Account UUID + "friend-2026-401"
 
 ### 全部物种（18 种）
 
-duck, goose, blob, cat, dragon, octopus, owl, penguin, turtle, snail, ghost, axolotl, capybara, cactus, robot, rabbit, mushroom, chonk
+duck, goose, blob, cat, dragon, octopus, owl, penguin,
+turtle, snail, ghost, axolotl, capybara, cactus, robot, rabbit, mushroom, chonk
 
 ## 手动修改指南
 

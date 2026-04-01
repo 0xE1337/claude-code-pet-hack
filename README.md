@@ -80,7 +80,8 @@ Each buddy has one **strong stat** and one **weak stat**, randomly chosen:
 
 ### Species (18 total)
 
-duck, goose, blob, cat, dragon, octopus, owl, penguin, turtle, snail, ghost, axolotl, capybara, cactus, robot, rabbit, mushroom, chonk
+duck, goose, blob, cat, dragon, octopus, owl, penguin,
+turtle, snail, ghost, axolotl, capybara, cactus, robot, rabbit, mushroom, chonk
 
 ### Data Storage
 
