@@ -170,31 +170,34 @@ fi
 
 # --- Find species variable name ---
 # Species are encoded as String.fromCharCode calls
-declare -A SPECIES_CODES=(
-  [duck]="100,117,99,107"
-  [goose]="103,111,111,115,101"
-  [blob]="98,108,111,98"
-  [cat]="99,97,116"
-  [dragon]="100,114,97,103,111,110"
-  [octopus]="111,99,116,111,112,117,115"
-  [owl]="111,119,108"
-  [penguin]="112,101,110,103,117,105,110"
-  [turtle]="116,117,114,116,108,101"
-  [snail]="115,110,97,105,108"
-  [ghost]="103,104,111,115,116"
-  [axolotl]="97,120,111,108,111,116,108"
-  [capybara]="99,97,112,121,98,97,114,97"
-  [cactus]="99,97,99,116,117,115"
-  [robot]="114,111,98,111,116"
-  [rabbit]="114,97,98,98,105,116"
-  [mushroom]="109,117,115,104,114,111,111,109"
-  [chonk]="99,104,111,110,107"
-)
+get_species_code() {
+  case "$1" in
+    duck)     echo "100,117,99,107" ;;
+    goose)    echo "103,111,111,115,101" ;;
+    blob)     echo "98,108,111,98" ;;
+    cat)      echo "99,97,116" ;;
+    dragon)   echo "100,114,97,103,111,110" ;;
+    octopus)  echo "111,99,116,111,112,117,115" ;;
+    owl)      echo "111,119,108" ;;
+    penguin)  echo "112,101,110,103,117,105,110" ;;
+    turtle)   echo "116,117,114,116,108,101" ;;
+    snail)    echo "115,110,97,105,108" ;;
+    ghost)    echo "103,104,111,115,116" ;;
+    axolotl)  echo "97,120,111,108,111,116,108" ;;
+    capybara) echo "99,97,112,121,98,97,114,97" ;;
+    cactus)   echo "99,97,99,116,117,115" ;;
+    robot)    echo "114,111,98,111,116" ;;
+    rabbit)   echo "114,97,98,98,105,116" ;;
+    mushroom) echo "109,117,115,104,114,111,111,109" ;;
+    chonk)    echo "99,104,111,110,107" ;;
+    *)        echo "" ;;
+  esac
+}
 
-SPECIES_CODE="${SPECIES_CODES[$SPECIES]:-}"
+SPECIES_CODE="$(get_species_code "$SPECIES")"
 if [[ -z "$SPECIES_CODE" ]]; then
   echo -e "${RED}Unknown species: $SPECIES${NC}"
-  echo "Available: ${!SPECIES_CODES[*]}"
+  echo "Available: duck goose blob cat dragon octopus owl penguin turtle snail ghost axolotl capybara cactus robot rabbit mushroom chonk"
   exit 1
 fi
 
@@ -235,17 +238,27 @@ else
   STATS_STR="$STATS_FUNC"
 fi
 
-# --- Build the original pattern to match ---
-# We need to match the full function up to the closing of bones
-ORIG_PATTERN="function ${FUNC_NAME}(q){let K=${RARITY_FUNC}(q);return{bones:{rarity:K,species:\$T6(q,uq4),eye:\$T6(q,mq4),hat:K===\"common\"?\"none\":\$T6(q,pq4),shiny:q()<0.01,stats:Dk_(q,K)}"
+# --- Extract the original function body to build exact match ---
+# Get the full original bones section from the generation function
+ORIG_BODY=$(grep -o "function ${FUNC_NAME}(q){[^}]*}" "$CLI_JS" | head -1)
 
-# Build replacement - note: we keep the rest of the function (inspirationSeed etc) unchanged
-REPLACEMENT="function ${FUNC_NAME}(q){let K=\"${RARITY}\";return{bones:{rarity:K,species:${SPECIES_VAR},eye:\"${EYE}\",hat:\"${HAT}\",shiny:${SHINY},${STATS_STR}}"
+if [[ -z "$ORIG_BODY" ]]; then
+  echo -e "${RED}Could not extract function body.${NC}"
+  exit 1
+fi
 
-# --- Apply patch ---
-# Use perl for reliable multi-char replacement
+echo -e "${BLUE}Original function found${NC}"
+
+# --- Build replacement ---
+REPL_BODY="function ${FUNC_NAME}(q){let K=\"${RARITY}\";return{bones:{rarity:K,species:${SPECIES_VAR},eye:\"${EYE}\",hat:\"${HAT}\",shiny:${SHINY},${STATS_STR}}"
+
+# --- Apply patch using perl \Q...\E for literal matching ---
 perl -i -pe "
-  s/\Qfunction ${FUNC_NAME}(q){let K=${RARITY_FUNC}(q);return{bones:{rarity:K,species:\$T6(q,uq4),eye:\$T6(q,mq4),hat:K===\"common\"?\"none\":\$T6(q,pq4),shiny:q()<0.01,stats:Dk_(q,K)}\E/function ${FUNC_NAME}(q){let K=\"${RARITY}\";return{bones:{rarity:K,species:${SPECIES_VAR},eye:\"${EYE}\",hat:\"${HAT}\",shiny:${SHINY},${STATS_STR}}}/
+  BEGIN {
+    \$orig = q|${ORIG_BODY}|;
+    \$repl = q|${REPL_BODY}|;
+  }
+  s/\Q\$orig\E/\$repl/
 " "$CLI_JS"
 
 # --- Verify ---
