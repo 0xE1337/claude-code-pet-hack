@@ -82,7 +82,87 @@ duck, goose, blob, cat, dragon, octopus, owl, penguin, turtle, snail, ghost, axo
 
 ## 手动修改指南
 
-详见 [README.md](./README.md#manual-patch-guide) 英文版的 Manual Patch Guide 部分。
+如果你不想用脚本，也可以手动操作：
+
+### 1. 找到 cli.js
+
+```bash
+# npm 全局安装的路径
+CLI_JS="$(npm root -g)/@anthropic-ai/claude-code/cli.js"
+
+# 或者手动查找
+find ~/.nvm -name "cli.js" -path "*claude-code*" 2>/dev/null
+```
+
+### 2. 备份
+
+```bash
+cp "$CLI_JS" "${CLI_JS}.backup"
+```
+
+### 3. 定位生成函数
+
+函数名每个版本都不同，但结构特征是稳定的：
+
+```bash
+grep -oE 'function [A-Za-z_$]+\(q\)\{let K=[A-Za-z_$]+\(q\);return\{bones:\{rarity:K' "$CLI_JS"
+```
+
+### 4. 找到目标物种的变量名
+
+物种名被编码成了 `String.fromCharCode(...)` 调用：
+
+```bash
+# 以 dragon 为例，找到对应的变量名：
+grep -oE '[A-Za-z0-9_$]+=JD\(100,114,97,103,111,110\)' "$CLI_JS"
+# 输出类似：IG8=JD(100,114,97,103,111,110)，即 IG8 = "dragon"
+```
+
+常用物种的 char codes：
+
+| 物种 | Char Codes |
+|------|-----------|
+| dragon | `100,114,97,103,111,110` |
+| cat | `99,97,116` |
+| duck | `100,117,99,107` |
+| axolotl | `97,120,111,108,111,116,108` |
+| mushroom | `109,117,115,104,114,111,111,109` |
+| penguin | `112,101,110,103,117,105,110` |
+| owl | `111,119,108` |
+| ghost | `103,104,111,115,116` |
+| robot | `114,111,98,111,116` |
+
+### 5. 打 Patch
+
+**完整修改（Shiny Legendary + 满属性）：**
+
+以 v2.1.x 为例（函数名 `Zk_`，龙变量 `IG8`）：
+
+```bash
+sed -i.bak 's/function Zk_(q){let K=Pk_(q);return{bones:{rarity:K,species:\$T6(q,uq4),eye:\$T6(q,mq4),hat:K==="common"?"none":\$T6(q,pq4),shiny:q()<0.01,stats:Dk_(q,K)}/function Zk_(q){let K="legendary";return{bones:{rarity:K,species:IG8,eye:"✦",hat:"crown",shiny:true,stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}}/' "$CLI_JS"
+```
+
+**只改属性（保留原物种和稀有度）：**
+
+```bash
+sed -i.bak 's/stats:Dk_(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/' "$CLI_JS"
+```
+
+### 6. 验证
+
+```bash
+grep -o 'function Zk_(q){[^}]*}' "$CLI_JS" | head -1
+```
+
+### 7. 重启 Claude Code
+
+关闭并重新打开 Claude Code，输入 `/buddy` 查看效果。
+
+### 8. 恢复原始
+
+```bash
+cp "${CLI_JS}.backup" "$CLI_JS"
+```
 
 ## 已知限制
 
