@@ -43,27 +43,18 @@ Browse the [Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) to fi
 # Step 1: Browse available buddies
 ./patch.sh --browse --species dragon --rarity legendary --shiny
 
-# Step 2: Pick one and rehatch (this patches cli.js temporarily)
-./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
+# Step 2: Pick one and configure all options (max stats + Chinese + rename)
+./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90 --stats max --lang zh --name "DragonFire"
 
 # Step 3: Restart Claude Code, type /buddy to trigger hatching
-#         ⚠️ The buddy will appear in English — this is normal (official hatching generates English)
+#         ⚠️ The buddy will appear in English — this is normal
+#         Official hatching only generates English; translation happens in the next step
 #         After hatching animation completes, close Claude Code
 
-# Step 4: Finalize (restores cli.js + locks bones + translates + renames + max stats all apply here)
+# Step 4: Finalize (restores cli.js + locks bones + max stats + translates + renames — all apply here)
 ./patch.sh --finish-rehatch
 
 # Step 5: Restart Claude Code again, type /buddy to see the final result ✅
-```
-
-Optional flags (applied automatically during `--finish-rehatch`):
-
-```bash
-# Max stats
-./patch.sh --rehatch <user_id> --stats max
-
-# Max stats + Chinese translation + rename
-./patch.sh --rehatch <user_id> --stats max --lang zh --name "DragonFire"
 ```
 
 ### Method 2: Switch Language

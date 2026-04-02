@@ -41,27 +41,18 @@
 # 第一步：浏览可选宠物
 ./patch.sh --browse --species dragon --rarity legendary --shiny
 
-# 第二步：选一只，开始 rehatch（临时修改 cli.js）
-./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
+# 第二步：选一只，配置所有选项（满属性 + 中文 + 改名）
+./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90 --stats max --lang zh --name "龙小火"
 
 # 第三步：重启 Claude Code，输入 /buddy 触发孵化动画
-#         ⚠️ 此时宠物显示为英文，这是正常的（官方 hatching 只生成英文）
+#         ⚠️ 此时宠物会显示英文名和英文描述，这是正常的
+#         因为官方 hatching 只生成英文，中文翻译在下一步自动完成
 #         等孵化动画结束后，关闭 Claude Code
 
-# 第四步：收尾（恢复 cli.js + 锁定 bones + 翻译中文 + 改名 + 满属性等全部在这一步生效）
+# 第四步：收尾（恢复 cli.js + 锁定 bones + 满属性 + 翻译中文 + 改名，全部在这一步生效）
 ./patch.sh --finish-rehatch
 
 # 第五步：再次重启 Claude Code，输入 /buddy 查看最终效果 ✅
-```
-
-可选参数（在 rehatch 时一并设置，finish 时自动生效）：
-
-```bash
-# 满属性
-./patch.sh --rehatch <user_id> --stats max
-
-# 满属性 + 中文翻译 + 改名
-./patch.sh --rehatch <user_id> --stats max --lang zh --name "龙小火"
 ```
 
 ### 方法二：切换中文/英文
