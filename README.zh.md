@@ -222,6 +222,11 @@ cp "${CLI_JS}.backup" "$CLI_JS"
 
 本工具修改的是你自己机器上安装的本地文件，供个人使用，不分发修改后的 Anthropic 代码。但请自行查阅相关服务条款。
 
+## 致谢
+
+- [Claude Buddy 图鉴](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) by [@zeke-chin](https://github.com/zeke-chin) — 全宠物图鉴，支持按物种/稀有度/闪光筛选。`--browse` 命令调用的就是他们的 API。
+- [linux.do](https://linux.do) 社区 — 发现了通过修改 userid 换宠物的方法。
+
 ## License
 
 MIT — 见 [LICENSE](./LICENSE)

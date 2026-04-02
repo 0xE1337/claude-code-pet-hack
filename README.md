@@ -232,6 +232,11 @@ The minified function names (like `Zk_`, `Dk_`, `IG8`) change between versions. 
 
 This tool modifies files installed locally on your own machine for personal use. It does not distribute modified Anthropic code. However, always review the relevant Terms of Service yourself.
 
+## Credits
+
+- [Claude Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) by [@zeke-chin](https://github.com/zeke-chin) — Full buddy collection with searchable filters. Our `--browse` command queries their API.
+- [linux.do](https://linux.do) community — For discovering the userid-swap method for buddy rehatch.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE)
