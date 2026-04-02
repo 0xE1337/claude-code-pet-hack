@@ -162,7 +162,7 @@ CLAUDE_JSON="$HOME/.claude.json"
 # ============================================================
 # MODE: Set language / name (modify .claude.json companion)
 # ============================================================
-if [[ -n "$SET_LANG" || -n "$SET_NAME" ]]; then
+if [[ (-n "$SET_LANG" || -n "$SET_NAME") && "$REHATCH" != "true" ]]; then
   if [[ ! -f "$CLAUDE_JSON" ]]; then
     echo -e "${RED}.claude.json not found${NC}"
     exit 1
