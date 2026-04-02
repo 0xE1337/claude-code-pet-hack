@@ -1,242 +1,234 @@
-# Claude Code Buddy Hack
+# Claude Code 宠物修改器
 
-Reverse-engineer and customize your Claude Code terminal companion (Buddy).
+[English](./README.en.md)
 
-> Claude Code has a hidden pet system — each account gets a deterministic companion generated from your account ID. This project documents the full generation algorithm and provides a one-command patch script to customize your buddy.
+逆向分析并自定义你的 Claude Code 终端宠物（Buddy）。
 
-[中文版](./README.zh.md)
+> Claude Code 内置了一个隐藏宠物系统 — 每个账号基于 account ID 确定性生成一只伴侣。本项目记录了完整的生成算法，并提供一键修改脚本。
 
-## Disclaimer
+## 免责声明
 
-This project is for **educational and entertainment purposes only**. It is not affiliated with, endorsed by, or associated with Anthropic in any way.
+本项目仅用于**学习和娱乐目的**，与 Anthropic 无任何关联。
 
-- This tool modifies local files installed on your machine. **Use at your own risk.**
-- Claude Code updates (`npm update -g @anthropic-ai/claude-code`) will **overwrite the patch** — you'll need to re-run the script after each update.
-- The buddy/companion system is purely cosmetic and has no effect on Claude Code's functionality.
-- While the risk of account action is extremely low (all changes are local, no data is sent to servers), **no guarantees are made**.
-- The minified function/variable names change between versions. The patch script uses pattern matching, but may need updates for future versions.
+- 本工具修改的是你本机安装的文件。**使用风险自负。**
+- Claude Code 更新（`npm update -g @anthropic-ai/claude-code`）会**覆盖修改** — 每次更新后需要重新运行脚本。
+- 宠物系统纯装饰，不影响 Claude Code 的任何实际功能。
+- 虽然封号风险极低（所有修改都在本地，不会向服务器发送数据），但**不做任何保证**。
+- 混淆后的函数/变量名会随版本变化，脚本使用特征匹配定位，但未来版本可能需要更新脚本。
 
-**By using this tool, you accept full responsibility for any consequences.**
+**使用本工具即表示你接受所有后果。**
 
-## What is Claude Code Buddy?
+## 什么是 Claude Code Buddy？
 
-Type `/buddy` in Claude Code to see your companion. Each buddy has:
+在 Claude Code 中输入 `/buddy` 即可查看你的宠物。每只宠物有：
 
-- **Species** — 18 types (Dragon, Cat, Duck, Axolotl, Mushroom, etc.)
-- **Rarity** — Common (60%) → Uncommon (25%) → Rare (10%) → Epic (4%) → Legendary (1%)
-- **Shiny** — 1% chance of rainbow glow effect
-- **Stats** — DEBUGGING, PATIENCE, CHAOS, WISDOM, SNARK (0-100)
-- **Hat** — crown, tophat, wizard, halo, propeller, beanie, tinyduck
-- **Eyes** — `·` `✦` `×` `◉` `@` `°`
+- **物种** — 18 种（龙、猫、鸭子、六角恐龙、蘑菇等）
+- **稀有度** — Common (60%) → Uncommon (25%) → Rare (10%) → Epic (4%) → Legendary (1%)
+- **闪光** — 1% 概率获得彩虹闪光特效
+- **属性** — DEBUGGING, PATIENCE, CHAOS, WISDOM, SNARK（0-100）
+- **帽子** — 皇冠、礼帽、巫师帽、光环、螺旋桨帽、毛线帽、小鸭子
+- **眼睛** — `·` `✦` `×` `◉` `@` `°`
 
-The rarest combination is **Shiny Legendary** — 1 in 10,000 chance.
+最稀有的组合是 **Shiny Legendary** — 万分之一的概率。
 
-## Quick Start
+## 快速开始
 
-### Method 1: Rehatch (Recommended)
+### 方法一：Rehatch 换宠物（推荐）
 
-Browse the [Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) to find a buddy you like, then rehatch with its user_id. This gives you an **official API-generated name and personality**.
+从 [Buddy 图鉴](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) 挑一只喜欢的宠物，用它的 user_id 重新孵化。这样能获得**官方 API 生成的名字和性格描述**。
 
 ```bash
-# Step 1: Browse available buddies
+# 第一步：浏览可选宠物
 ./patch.sh --browse --species dragon --rarity legendary --shiny
 
-# Step 2: Pick one and rehatch (this patches cli.js temporarily)
+# 第二步：选一只，开始 rehatch（临时修改 cli.js）
 ./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
 
-# Step 3: Restart Claude Code, type /buddy to trigger hatching
+# 第三步：重启 Claude Code，输入 /buddy 触发孵化动画
 
-# Step 4: After hatching completes, finalize (restores cli.js, keeps new companion)
+# 第四步：孵化完成后，收尾（恢复 cli.js，保留新宠物数据）
 ./patch.sh --finish-rehatch
 ```
 
-Want max stats too? Add `--stats max`:
+想要满属性？加 `--stats max`：
 
 ```bash
 ./patch.sh --rehatch <user_id> --stats max
 ```
 
-### Method 2: Stats Only
+### 方法二：只改属性
 
-Keep your original buddy, just max out all stats:
+保留原宠物，只把属性拉满：
 
 ```bash
 ./patch.sh --stats-only
 ```
 
-### Method 3: Legacy (Direct Patch)
+### 方法三：Legacy 直接 Patch
 
-Directly override species/rarity/shiny without official name generation:
+直接覆盖物种/稀有度/闪光，不走官方名字生成：
 
 ```bash
 ./patch.sh --legacy --species cat --rarity epic --no-shiny
 ```
 
-### Restore
+### 恢复原始
 
 ```bash
 ./patch.sh --restore
 ```
 
-## How It Works
+## 生成原理
 
-### Generation Pipeline
+### 生成链路
 
 ```
 Account UUID + "friend-2026-401"
-    → FNV-1a hash
-    → Mulberry32 PRNG seed
-    → Deterministic: species, rarity, eyes, hat, shiny, stats
+    → FNV-1a 哈希
+    → Mulberry32 伪随机种子
+    → 确定性生成：物种、稀有度、眼睛、帽子、闪光、属性
 ```
 
-Your account always generates the same buddy. The only way to change it is to patch the generation function in `cli.js`.
+同一账号永远生成同一只宠物。唯一的修改方式是 patch `cli.js` 中的生成函数。
 
-### Rarity Table
+### 稀有度表
 
-| Rarity | Chance | Base Stats | Color | Stars |
-|--------|--------|-----------|-------|-------|
-| Common | 60% | 5 | Gray | ★ |
-| Uncommon | 25% | 15 | Green | ★★ |
-| Rare | 10% | 25 | Blue | ★★★ |
-| Epic | 4% | 35 | Purple | ★★★★ |
-| Legendary | 1% | 50 | Gold | ★★★★★ |
+| 等级 | 概率 | 基础属性 | 颜色 | 星级 |
+|------|------|----------|------|------|
+| Common | 60% | 5 | 灰色 | ★ |
+| Uncommon | 25% | 15 | 绿色 | ★★ |
+| Rare | 10% | 25 | 蓝色 | ★★★ |
+| Epic | 4% | 35 | 紫色 | ★★★★ |
+| Legendary | 1% | 50 | 金色 | ★★★★★ |
 
-### Stats Generation
+### 属性生成
 
-Each buddy has one **strong stat** and one **weak stat**, randomly chosen:
+每只宠物随机选一项为"强项"，一项为"弱项"：
 
-- Strong: `base + 50 + random(0-30)`, capped at 100
-- Weak: `base - 10 + random(0-15)`, minimum 1
-- Others: `base + random(0-40)`
+- 强项：`基础 + 50 + random(0-30)`，上限 100
+- 弱项：`基础 - 10 + random(0-15)`，下限 1
+- 普通：`基础 + random(0-40)`
 
-### Species (18 total)
+### 全部物种（18 种）
 
 duck, goose, blob, cat, dragon, octopus, owl, penguin,
 turtle, snail, ghost, axolotl, capybara, cactus, robot, rabbit, mushroom, chonk
 
-### Data Storage
+## 手动修改指南
 
-User-editable fields are stored in `~/.claude/.claude.json`:
+如果你不想用脚本，也可以手动操作：
 
-```json
-{
-  "companion": {
-    "name": "Siltwick",
-    "personality": "A condescending toadstool who...",
-    "hatchedAt": 1775017402675
-  }
-}
-```
-
-The `bones` (species, rarity, stats, etc.) are generated at runtime from the code — not stored in JSON.
-
-## Manual Patch Guide
-
-If you prefer to do it yourself instead of using the script:
-
-### 1. Find cli.js
+### 1. 找到 cli.js
 
 ```bash
-# npm global install
+# npm 全局安装的路径
 CLI_JS="$(npm root -g)/@anthropic-ai/claude-code/cli.js"
 
-# or find it manually
+# 或者手动查找
 find ~/.nvm -name "cli.js" -path "*claude-code*" 2>/dev/null
 ```
 
-### 2. Backup
+### 2. 备份
 
 ```bash
 cp "$CLI_JS" "${CLI_JS}.backup"
 ```
 
-### 3. Locate the generation function
+### 3. 定位生成函数
 
-The function name changes between versions, but the signature is stable:
+函数名每个版本都不同，但结构特征是稳定的：
 
 ```bash
 grep -oE 'function [A-Za-z_$]+\(q\)\{let K=[A-Za-z_$]+\(q\);return\{bones:\{rarity:K' "$CLI_JS"
 ```
 
-### 4. Patch
+### 4. 找到目标物种的变量名
 
-**Full patch (Shiny Legendary + max stats):**
+物种名被编码成了 `String.fromCharCode(...)` 调用：
 
-Find the species variable for dragon:
 ```bash
-# Species are encoded as char codes. Find the dragon variable:
+# 以 dragon 为例，找到对应的变量名：
 grep -oE '[A-Za-z0-9_$]+=JD\(100,114,97,103,111,110\)' "$CLI_JS"
-# e.g., IG8=JD(100,114,97,103,111,110) means IG8 = "dragon"
+# 输出类似：IG8=JD(100,114,97,103,111,110)，即 IG8 = "dragon"
 ```
 
-Then replace the generation function (example for v2.1.x where function is `Zk_` and dragon is `IG8`):
+常用物种的 char codes：
+
+| 物种 | Char Codes |
+|------|-----------|
+| dragon | `100,114,97,103,111,110` |
+| cat | `99,97,116` |
+| duck | `100,117,99,107` |
+| axolotl | `97,120,111,108,111,116,108` |
+| mushroom | `109,117,115,104,114,111,111,109` |
+| penguin | `112,101,110,103,117,105,110` |
+| owl | `111,119,108` |
+| ghost | `103,104,111,115,116` |
+| robot | `114,111,98,111,116` |
+
+### 5. 打 Patch
+
+**完整修改（Shiny Legendary + 满属性）：**
+
+以 v2.1.x 为例（函数名 `Zk_`，龙变量 `IG8`）：
 
 ```bash
 sed -i.bak 's/function Zk_(q){let K=Pk_(q);return{bones:{rarity:K,species:\$T6(q,uq4),eye:\$T6(q,mq4),hat:K==="common"?"none":\$T6(q,pq4),shiny:q()<0.01,stats:Dk_(q,K)}/function Zk_(q){let K="legendary";return{bones:{rarity:K,species:IG8,eye:"✦",hat:"crown",shiny:true,stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}}/' "$CLI_JS"
 ```
 
-**Stats-only patch (keep original species/rarity):**
+**只改属性（保留原物种和稀有度）：**
 
 ```bash
 sed -i.bak 's/stats:Dk_(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/' "$CLI_JS"
 ```
 
-### 5. Verify
+### 6. 验证
 
 ```bash
 grep -o 'function Zk_(q){[^}]*}' "$CLI_JS" | head -1
 ```
 
-### 6. Restart Claude Code
+### 7. 重启 Claude Code
 
-Close and reopen Claude Code, then type `/buddy` to see the result.
+关闭并重新打开 Claude Code，输入 `/buddy` 查看效果。
 
-### 7. Restore
+### 8. 恢复原始
 
 ```bash
 cp "${CLI_JS}.backup" "$CLI_JS"
 ```
 
-## Reverse Engineering Details
+## 已知限制
 
-See [INTERNALS.md](./INTERNALS.md) for the full deobfuscated source code of the buddy system, including:
+| 问题 | 影响 | 解决方式 |
+|------|------|----------|
+| Claude Code 更新覆盖 patch | 更新后修改丢失 | 更新后重新运行 `./patch.sh` |
+| 混淆函数名随版本变化 | 脚本可能无法定位目标函数 | 脚本使用结构匹配；如失败需更新脚本 |
+| 无服务端持久化 | 宠物数据仅在客户端生成 | 这反而是优点 — 没有服务端校验意味着没有封号风险 |
 
-- FNV-1a hash implementation
-- Mulberry32 PRNG
-- Species/rarity/stats generation logic
-- ASCII art rendering system
+## 常见问题
 
-## Known Limitations
+**会封号吗？**
 
-| Issue | Impact | Workaround |
-|-------|--------|------------|
-| Claude Code updates overwrite patch | Patch lost after `npm update` | Re-run `./patch.sh` after each update |
-| Minified function names change between versions | Script may fail to locate target function | Script uses structural pattern matching; update script if it fails |
-| No server-side persistence | Buddy data is generated client-side only | This is actually a feature — no server validation means no ban risk |
+概率极低。宠物系统纯装饰，完全在客户端运行，不会向 Anthropic 服务器发送宠物数据进行校验。但不做保证 — 风险自负。
 
-## FAQ
+**更新后还在吗？**
 
-**Will this get my account banned?**
+不在。`npm update -g @anthropic-ai/claude-code` 或自动更新会覆盖 patch。更新后重新运行 `./patch.sh` 即可。
 
-Extremely unlikely. The buddy system is purely cosmetic and runs entirely client-side. No buddy data is sent to Anthropic's servers for validation. However, this is not guaranteed — use at your own risk.
+**更新后函数名变了怎么办？**
 
-**Will it survive updates?**
+混淆后的函数名（如 `Zk_`、`Dk_`、`IG8`）每个版本都不同。脚本使用结构特征匹配（匹配函数体形状而非名字）来定位目标。如果大重构改变了函数结构，需要更新脚本。
 
-No. Running `npm update -g @anthropic-ai/claude-code` or automatic updates will overwrite the patch. Re-run `./patch.sh` after updating.
+**合法吗？**
 
-**Function names changed after update?**
+本工具修改的是你自己机器上安装的本地文件，供个人使用，不分发修改后的 Anthropic 代码。但请自行查阅相关服务条款。
 
-The minified function names (like `Zk_`, `Dk_`, `IG8`) change between versions. The patch script uses structural pattern matching (matching the function body shape, not the name) to locate the target. If a major refactor changes the function structure, the script will need updating.
+## 致谢
 
-**Is this legal?**
-
-This tool modifies files installed locally on your own machine for personal use. It does not distribute modified Anthropic code. However, always review the relevant Terms of Service yourself.
-
-## Credits
-
-- [Claude Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) by [@zeke-chin](https://github.com/zeke-chin) — Full buddy collection with searchable filters. Our `--browse` command queries their API.
-- [linux.do](https://linux.do) community — For discovering the userid-swap method for buddy rehatch.
+- [Claude Buddy 图鉴](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) by [@zeke-chin](https://github.com/zeke-chin) — 全宠物图鉴，支持按物种/稀有度/闪光筛选。`--browse` 命令调用的就是他们的 API。
+- [linux.do](https://linux.do) 社区 — 发现了通过修改 userid 换宠物的方法。
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT — 见 [LICENSE](./LICENSE)
