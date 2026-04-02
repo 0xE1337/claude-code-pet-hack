@@ -56,7 +56,31 @@
 ./patch.sh --rehatch <user_id> --stats max
 ```
 
-### 方法二：只改属性
+### 方法二：切换中文/英文
+
+将官方英文描述翻译为中文（调用 Claude CLI 翻译，保留原汁原味）：
+
+```bash
+# 翻译为中文（卡片描述 + 气泡对话都变中文）
+./patch.sh --lang zh
+
+# 恢复英文
+./patch.sh --lang en
+```
+
+改名：
+
+```bash
+./patch.sh --name "龙小火"
+```
+
+组合使用：
+
+```bash
+./patch.sh --lang zh --name "龙小火"
+```
+
+### 方法三：只改属性
 
 保留原宠物，只把属性拉满：
 
@@ -64,7 +88,7 @@
 ./patch.sh --stats-only
 ```
 
-### 方法三：Legacy 直接 Patch
+### 方法四：Legacy 直接 Patch
 
 直接覆盖物种/稀有度/闪光，不走官方名字生成：
 

@@ -58,7 +58,25 @@ Want max stats too? Add `--stats max`:
 ./patch.sh --rehatch <user_id> --stats max
 ```
 
-### Method 2: Stats Only
+### Method 2: Switch Language
+
+Translate the official English personality to Chinese (uses Claude CLI for translation):
+
+```bash
+# Switch to Chinese (both card description and bubble chat)
+./patch.sh --lang zh
+
+# Switch back to English
+./patch.sh --lang en
+```
+
+Rename your buddy:
+
+```bash
+./patch.sh --name "DragonFire"
+```
+
+### Method 3: Stats Only
 
 Keep your original buddy, just max out all stats:
 
@@ -66,7 +84,7 @@ Keep your original buddy, just max out all stats:
 ./patch.sh --stats-only
 ```
 
-### Method 3: Legacy (Direct Patch)
+### Method 4: Legacy (Direct Patch)
 
 Directly override species/rarity/shiny without official name generation:
 
