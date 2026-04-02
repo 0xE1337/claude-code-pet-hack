@@ -19,6 +19,7 @@ RESTORE=false
 REHATCH=false
 USER_ID=""
 BROWSE=false
+FINISH_REHATCH=false
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -95,6 +96,7 @@ while [[ $# -gt 0 ]]; do
       shift 2 ;;
     --stats-only) STATS_ONLY=true; shift ;;
     --restore) RESTORE=true; shift ;;
+    --finish-rehatch) FINISH_REHATCH=true; shift ;;
     --help|-h) usage ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
   esac
@@ -273,17 +275,11 @@ fi
 # ============================================================
 # MODE: Finish rehatch (restore RR1, optionally max stats)
 # ============================================================
-if [[ "${1:-}" == "--finish-rehatch" ]] 2>/dev/null || false; then
-  true  # handled below
-fi
-
-# Check for --finish-rehatch anywhere in args
-for arg in "$@" "${1:-}"; do
-  if [[ "$arg" == "--finish-rehatch" ]]; then
-    if [[ ! -f "${CLI_JS}.backup" ]]; then
-      echo -e "${RED}No backup found. Did you run --rehatch first?${NC}"
-      exit 1
-    fi
+if [[ "$FINISH_REHATCH" == "true" ]]; then
+  if [[ ! -f "${CLI_JS}.backup" ]]; then
+    echo -e "${RED}No backup found. Did you run --rehatch first?${NC}"
+    exit 1
+  fi
 
     # Restore cli.js
     cp "${CLI_JS}.backup" "$CLI_JS"
@@ -317,11 +313,10 @@ else:
     print('  Warning: No companion data found. Did you run /buddy after --rehatch?')
 " 2>/dev/null
 
-    echo ""
-    echo -e "${YELLOW}Restart Claude Code to see your new companion!${NC}"
-    exit 0
-  fi
-done
+  echo ""
+  echo -e "${YELLOW}Restart Claude Code to see your new companion!${NC}"
+  exit 0
+fi
 
 # ============================================================
 # MODE: Stats-only
