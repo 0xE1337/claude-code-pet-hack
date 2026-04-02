@@ -399,6 +399,8 @@ else:
   # Save state for --finish-rehatch
   echo "$USER_ID" > "${CLI_JS}.rehatch-state"
   [[ "$STATS_MAX" == "true" ]] && echo "stats_max" >> "${CLI_JS}.rehatch-state"
+  [[ "$SET_LANG" == "zh" ]] && echo "lang_zh" >> "${CLI_JS}.rehatch-state"
+  [[ -n "$SET_NAME" ]] && echo "name:${SET_NAME}" >> "${CLI_JS}.rehatch-state"
 
   exit 0
 fi
@@ -418,6 +420,8 @@ if [[ "$FINISH_REHATCH" == "true" ]]; then
   if [[ -f "${CLI_JS}.rehatch-state" ]]; then
     SAVED_UID=$(head -1 "${CLI_JS}.rehatch-state")
     grep -q "stats_max" "${CLI_JS}.rehatch-state" 2>/dev/null && WANT_STATS_MAX=true
+    grep -q "lang_zh" "${CLI_JS}.rehatch-state" 2>/dev/null && WANT_LANG_ZH=true || WANT_LANG_ZH=false
+    WANT_NAME=$(grep -o 'name:.*' "${CLI_JS}.rehatch-state" 2>/dev/null | sed 's/name://' || true)
   fi
 
   # Restore cli.js from backup first
@@ -503,6 +507,39 @@ if [[ "$FINISH_REHATCH" == "true" ]]; then
 
   rm -f "${CLI_JS}.rehatch-state"
 
+  # Apply --lang zh if requested
+  if [[ "$WANT_LANG_ZH" == "true" ]]; then
+    echo -e "${BLUE}Translating personality to Chinese...${NC}"
+    CURRENT_P=$(python3 -c "import json; print(json.load(open('$CLAUDE_JSON')).get('companion',{}).get('personality',''))" 2>/dev/null)
+    if [[ -n "$CURRENT_P" ]]; then
+      TRANSLATED=$(claude -p "Translate the following companion personality description to Chinese. Keep the same tone, humor, and personality vibe. Output ONLY the translated Chinese text, nothing else.
+
+$CURRENT_P" --model haiku 2>/dev/null || true)
+      if [[ -n "$TRANSLATED" && ${#TRANSLATED} -gt 10 ]]; then
+        python3 -c "
+import json
+data = json.load(open('$CLAUDE_JSON'))
+data['companion']['personality'] = '${TRANSLATED//\'/\\\'}' + ' <!-- zh -->' + data['companion']['personality']
+json.dump(data, open('$CLAUDE_JSON', 'w'), ensure_ascii=False)
+" 2>/dev/null
+        echo -e "${GREEN}Personality translated to Chinese${NC}"
+      else
+        echo -e "${YELLOW}Translation failed, personality kept in English${NC}"
+      fi
+    fi
+  fi
+
+  # Apply --name if requested
+  if [[ -n "$WANT_NAME" ]]; then
+    python3 -c "
+import json
+data = json.load(open('$CLAUDE_JSON'))
+data['companion']['name'] = '$WANT_NAME'
+json.dump(data, open('$CLAUDE_JSON', 'w'), ensure_ascii=False)
+" 2>/dev/null
+    echo -e "${GREEN}Name set to: $WANT_NAME${NC}"
+  fi
+
   # Show current companion
   echo ""
   python3 -c "
@@ -510,10 +547,13 @@ import json
 data = json.load(open('$CLAUDE_JSON'))
 comp = data.get('companion', {})
 if comp:
+    p = comp.get('personality', '?')
+    if '<!-- zh -->' in p:
+        p = p.split('<!-- zh -->')[0].strip()
     print(f\"  Name:        {comp.get('name', '?')}\")
-    print(f\"  Personality: {comp.get('personality', '?')[:80]}...\")
+    print(f\"  Personality: {p[:80]}...\")
     print()
-    print('  Rehatch complete! Your buddy has an official API-generated identity.')
+    print('  Rehatch complete!')
 else:
     print('  Warning: No companion data found. Did you run /buddy after --rehatch?')
 " 2>/dev/null

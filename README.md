@@ -50,10 +50,14 @@
 ./patch.sh --finish-rehatch
 ```
 
-想要满属性？加 `--stats max`：
+可选参数（在 rehatch 时一并设置，finish 时自动生效）：
 
 ```bash
+# 满属性
 ./patch.sh --rehatch <user_id> --stats max
+
+# 满属性 + 中文翻译 + 改名
+./patch.sh --rehatch <user_id> --stats max --lang zh --name "龙小火"
 ```
 
 ### 方法二：切换中文/英文

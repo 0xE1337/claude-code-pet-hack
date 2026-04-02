@@ -52,10 +52,14 @@ Browse the [Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) to fi
 ./patch.sh --finish-rehatch
 ```
 
-Want max stats too? Add `--stats max`:
+Optional flags (applied automatically during `--finish-rehatch`):
 
 ```bash
+# Max stats
 ./patch.sh --rehatch <user_id> --stats max
+
+# Max stats + Chinese translation + rename
+./patch.sh --rehatch <user_id> --stats max --lang zh --name "DragonFire"
 ```
 
 ### Method 2: Switch Language
