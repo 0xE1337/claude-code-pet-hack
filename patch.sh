@@ -245,26 +245,22 @@ if lang == 'zh':
             print(f'Translation error: {e}')
 
         if translated and len(translated) > 10:
-            # Store original for restore, save translated
-            comp['personality'] = translated + ' ' + ZH_TAG + current
+            comp['_personality_en'] = current
+            comp['personality'] = translated
             print(f'Translated: {translated}')
         else:
-            # Fallback: prefix approach
+            comp['_personality_en'] = current
             comp['personality'] = '请始终用中文回复。' + current
             print('API translation failed, using prefix fallback.')
 
 elif lang == 'en':
-    current = comp.get('personality', '')
-    if ZH_TAG in current:
-        # Restore original English from after the tag
-        original = current.split(ZH_TAG, 1)[1]
+    original = comp.get('_personality_en', '')
+    if original:
         comp['personality'] = original
+        del comp['_personality_en']
         print('Restored original English personality.')
-    elif current.startswith('请始终用中文回复。'):
-        comp['personality'] = current[len('请始终用中文回复。'):]
-        print('Removed Chinese prefix.')
     else:
-        print('Already in English.')
+        print('No saved English personality found. Already in English?')
 
 if name:
     comp['name'] = name
@@ -519,7 +515,8 @@ $CURRENT_P" --model haiku 2>/dev/null || true)
         python3 -c "
 import json
 data = json.load(open('$CLAUDE_JSON'))
-data['companion']['personality'] = '${TRANSLATED//\'/\\\'}' + ' <!-- zh -->' + data['companion']['personality']
+data['companion']['_personality_en'] = data['companion']['personality']
+data['companion']['personality'] = '''${TRANSLATED//\'/\\\'}'''
 json.dump(data, open('$CLAUDE_JSON', 'w'), ensure_ascii=False)
 " 2>/dev/null
         echo -e "${GREEN}Personality translated to Chinese${NC}"
@@ -548,8 +545,6 @@ data = json.load(open('$CLAUDE_JSON'))
 comp = data.get('companion', {})
 if comp:
     p = comp.get('personality', '?')
-    if '<!-- zh -->' in p:
-        p = p.split('<!-- zh -->')[0].strip()
     print(f\"  Name:        {comp.get('name', '?')}\")
     print(f\"  Personality: {p[:80]}...\")
     print()
