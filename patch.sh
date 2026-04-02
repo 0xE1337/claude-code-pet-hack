@@ -20,6 +20,8 @@ REHATCH=false
 USER_ID=""
 BROWSE=false
 FINISH_REHATCH=false
+SET_LANG=""
+SET_NAME=""
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -66,10 +68,18 @@ Legacy Options:
   --eye <char>        Available: · ✦ × ◉ @ °
   --stats max|keep    Set all stats to 100 or keep original
 
+Personality Options:
+  --lang zh                          Switch buddy personality to Chinese (auto-detects species)
+  --lang zh --species dragon         Specify species for Chinese personality
+  --lang en                          Info on restoring English
+  --name <name>                      Rename your buddy (e.g. --name 龙小火)
+
 Examples:
   ./patch.sh --browse --species dragon --rarity legendary --shiny
   ./patch.sh --rehatch 7173a7ad...
   ./patch.sh --rehatch 7173a7ad... --stats max
+  ./patch.sh --lang zh                                        # Switch to Chinese personality
+  ./patch.sh --lang zh --name 龙小火                           # Chinese + rename
   ./patch.sh --stats-only
   ./patch.sh --restore
   ./patch.sh --legacy --species cat --rarity epic
@@ -97,6 +107,8 @@ while [[ $# -gt 0 ]]; do
     --stats-only) STATS_ONLY=true; shift ;;
     --restore) RESTORE=true; shift ;;
     --finish-rehatch) FINISH_REHATCH=true; shift ;;
+    --lang) SET_LANG="$2"; shift 2 ;;
+    --name) SET_NAME="$2"; shift 2 ;;
     --help|-h) usage ;;
     *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
   esac
@@ -146,6 +158,111 @@ fi
 echo -e "${BLUE}Found cli.js:${NC} $CLI_JS"
 
 CLAUDE_JSON="$HOME/.claude.json"
+
+# ============================================================
+# MODE: Set language / name (modify .claude.json companion)
+# ============================================================
+if [[ -n "$SET_LANG" || -n "$SET_NAME" ]]; then
+  if [[ ! -f "$CLAUDE_JSON" ]]; then
+    echo -e "${RED}.claude.json not found${NC}"
+    exit 1
+  fi
+
+  # Detect species using Node.js before entering Python
+  DETECTED_SPECIES=""
+  if [[ "$SET_LANG" == "zh" ]]; then
+    # Use --species if provided
+    if [[ -n "$SPECIES" ]]; then
+      DETECTED_SPECIES="$SPECIES"
+    fi
+    # Otherwise try to detect from patched bones function
+    if [[ -z "$DETECTED_SPECIES" ]]; then
+    PATCHED_SP=$(grep -oE 'species:[A-Za-z0-9_]+,eye:"' "$CLI_JS" 2>/dev/null | head -1 | sed 's/species://' | sed 's/,eye:"//' || true)
+    if [[ -n "$PATCHED_SP" ]]; then
+      CHAR_FUNC=$(grep -oE '[A-Za-z_]+\(100,117,99,107\)' "$CLI_JS" | head -1 | sed 's/(100,117,99,107)//')
+      if [[ -n "$CHAR_FUNC" ]]; then
+        SP_CODES=$(grep -oE "${PATCHED_SP}=${CHAR_FUNC}\\([0-9,]+\\)" "$CLI_JS" | head -1 | grep -oE '\([0-9,]+\)' | tr -d '()')
+        if [[ -n "$SP_CODES" ]]; then
+          DETECTED_SPECIES=$(python3 -c "print(''.join(chr(int(c)) for c in '${SP_CODES}'.split(',')))" 2>/dev/null)
+        fi
+      fi
+    fi
+    fi
+    # Fallback: compute from accountUuid
+    if [[ -z "$DETECTED_SPECIES" ]]; then
+      DETECTED_SPECIES=$(node -e "
+        function fnv1a(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+        function mulberry32(s){let t=s>>>0;return function(){t|=0;t=t+1831565813|0;let x=Math.imul(t^t>>>15,1|t);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296}}
+        const SP=['duck','goose','blob','cat','dragon','octopus','owl','penguin','turtle','snail','ghost','axolotl','capybara','cactus','robot','rabbit','mushroom','chonk'];
+        const d=require('fs').readFileSync(process.env.HOME+'/.claude.json','utf8');
+        const j=JSON.parse(d);const uid=j.oauthAccount?.accountUuid||j.userID||'anon';
+        const rng=mulberry32(fnv1a(uid+'friend-2026-401'));rng();
+        console.log(SP[Math.floor(rng()*SP.length)]);
+      " 2>/dev/null || true)
+    fi
+    echo -e "${BLUE}Detected species:${NC} ${DETECTED_SPECIES:-unknown}"
+  fi
+
+  python3 -c "
+import json, sys
+
+f = '$CLAUDE_JSON'
+data = json.load(open(f))
+comp = data.get('companion')
+if not comp:
+    print('No companion found. Run /buddy first.')
+    sys.exit(1)
+
+lang = '$SET_LANG'
+name = '$SET_NAME'
+detected_species = '$DETECTED_SPECIES'
+
+# Chinese personality templates per species vibe
+zh_personalities = {
+    'dragon': '一条上古神龙，用令人不安的全知视角审视你的 bug，用看过千个文明毁灭的冷漠语气点评你的代码逻辑，偶尔提醒你正在踩三个 commit 前自己埋的坑。',
+    'cat': '一只高冷的猫，趴在你的键盘旁边假装睡觉，但每次你写出烂代码它都会睁开一只眼睛用鄙视的目光看你，偶尔伸爪拍一下屏幕表示不满。',
+    'duck': '一只表面呆萌实则毒舌的鸭子，你跟它说代码逻辑它就歪头看你，但每次歪头之后你就突然想通了，它管这叫「鸭子调试法」。',
+    'ghost': '一个幽灵，在你写代码的时候飘在旁边阴阳怪气，嘴毒值拉满但偶尔说的话让你醍醐灌顶，你怀疑它前世是个被 996 猝死的高级架构师。',
+    'mushroom': '一朵傲慢的蘑菇，能瞬间发现你的 bug 但会一边修一边疯狂吐槽你的变量命名，口头禅是「这命名是认真的吗」。',
+    'owl': '一只自认为很有智慧的猫头鹰，喜欢在你写代码到凌晨三点时突然冒出来说「你知道吗，这个 bug 其实在第一行就注定了」。',
+    'penguin': '一只企鹅，走路摇摇晃晃但代码审查一针见血，最喜欢说的话是「你这段逻辑比南极的冰还冷」。',
+    'robot': '一个机器人，说话永远是陈述句没有感情，但每次 review 都精准到让你怀疑它是不是在监控你的屏幕。',
+    'axolotl': '一只六角蝾螈，看起来永远在微笑但其实在嘲笑你的代码，它的再生能力就像你反复修同一个 bug 的能力一样强。',
+    'capybara': '一只水豚，看起来很佛系很淡定，但每次你准备提交有 bug 的代码它都会用一种「你确定？」的眼神看你，让你不得不再检查一遍。',
+    'blob': '一坨不明物体，没有固定形态但能完美适应任何代码风格，虽然看起来什么都不懂但它给的建议总是莫名其妙地正确。',
+    'goose': '一只鹅，非常凶，看到烂代码就「嘎嘎嘎」叫个不停，偶尔会叼走你正在写的那行代码然后跑掉，但你后来发现删掉确实是对的。',
+    'turtle': '一只乌龟，review 代码很慢但非常仔细，口头禅是「慢即是快，你这段代码跑得快但方向是错的」。',
+    'snail': '一只蜗牛，爬过你的代码留下的痕迹就是它标注的问题所在，虽然慢但从不遗漏，是团队里最靠谱的 reviewer。',
+    'rabbit': '一只兔子，看代码跟吃胡萝卜一样快，经常蹦出一句「这里有个 race condition」然后又蹦走了。',
+    'cactus': '一棵仙人掌，说话带刺但都是真心话，你靠近它就会被扎，但远离它你的代码质量就会下降。',
+    'chonk': '一个胖墩墩的生物，占据你屏幕一角默默吃零食，偶尔打个嗝然后指出一个你找了两小时的 bug。',
+}
+
+if lang == 'zh':
+    detected = detected_species if detected_species in zh_personalities else None
+    if detected and detected in zh_personalities:
+        comp['personality'] = zh_personalities[detected]
+        print(f'Personality set to Chinese ({detected})')
+    else:
+        comp['personality'] = '一个神秘的生物，默默观察你写代码，偶尔冒出一句毒舌点评让你怀疑人生，但你不得不承认它说得对。'
+        print('Personality set to Chinese (generic)')
+
+elif lang == 'en':
+    print('To restore English personality, run: ./patch.sh --rehatch <user_id>')
+    print('Or manually edit ~/.claude.json')
+    sys.exit(0)
+
+if name:
+    comp['name'] = name
+    print(f'Name set to: {name}')
+
+data['companion'] = comp
+json.dump(data, open(f, 'w'), ensure_ascii=False)
+print('Done! Changes take effect immediately (no restart needed).')
+" || exit 1
+
+  exit 0
+fi
 
 # ============================================================
 # MODE: Restore
