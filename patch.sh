@@ -273,7 +273,7 @@ else:
 fi
 
 # ============================================================
-# MODE: Finish rehatch (restore RR1, optionally max stats)
+# MODE: Finish rehatch (restore RR1, patch bones to match target)
 # ============================================================
 if [[ "$FINISH_REHATCH" == "true" ]]; then
   if [[ ! -f "${CLI_JS}.backup" ]]; then
@@ -281,26 +281,100 @@ if [[ "$FINISH_REHATCH" == "true" ]]; then
     exit 1
   fi
 
-    # Restore cli.js
-    cp "${CLI_JS}.backup" "$CLI_JS"
-    echo -e "${GREEN}cli.js restored (RR1 back to original)${NC}"
+  # Read saved user_id
+  SAVED_UID=""
+  WANT_STATS_MAX=false
+  if [[ -f "${CLI_JS}.rehatch-state" ]]; then
+    SAVED_UID=$(head -1 "${CLI_JS}.rehatch-state")
+    grep -q "stats_max" "${CLI_JS}.rehatch-state" 2>/dev/null && WANT_STATS_MAX=true
+  fi
 
-    # Check if stats max was requested
-    if [[ -f "${CLI_JS}.rehatch-state" ]] && grep -q "stats_max" "${CLI_JS}.rehatch-state" 2>/dev/null; then
-      echo -e "${BLUE}Applying max stats...${NC}"
-      STATS_FUNC=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1 | sed 's/stats://' | sed 's/(q,K)//')
-      if [[ -n "$STATS_FUNC" ]]; then
-        sed -i.tmp "s/stats:${STATS_FUNC}(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/" "$CLI_JS"
-        rm -f "${CLI_JS}.tmp"
-        echo -e "${GREEN}Stats maxed to 100!${NC}"
+  # Restore cli.js from backup first
+  cp "${CLI_JS}.backup" "$CLI_JS"
+  echo -e "${GREEN}cli.js restored (RR1 back to original)${NC}"
+
+  # Calculate what bones the target user_id generates, then apply legacy patch
+  if [[ -n "$SAVED_UID" ]]; then
+    echo -e "${BLUE}Calculating bones for target user_id...${NC}"
+
+    # Use Node.js to compute exact bones
+    BONES=$(node -e "
+      function fnv1a(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+      function mulberry32(s){let t=s>>>0;return function(){t|=0;t=t+1831565813|0;let x=Math.imul(t^t>>>15,1|t);x=x+Math.imul(x^x>>>7,61|x)^x;return((x^x>>>14)>>>0)/4294967296}}
+      function pick(r,a){return a[Math.floor(r()*a.length)]}
+      const SP=['duck','goose','blob','cat','dragon','octopus','owl','penguin','turtle','snail','ghost','axolotl','capybara','cactus','robot','rabbit','mushroom','chonk'];
+      const EY=['·','✦','×','◉','@','°'];
+      const HT=['none','crown','tophat','propeller','halo','wizard','beanie','tinyduck'];
+      const RO=['common','uncommon','rare','epic','legendary'];
+      const RW={common:60,uncommon:25,rare:10,epic:4,legendary:1};
+      let rng=mulberry32(fnv1a('${SAVED_UID}'+'friend-2026-401'));
+      let roll=rng()*100,rarity='common';
+      for(const r of RO){roll-=RW[r];if(roll<0){rarity=r;break}}
+      let species=pick(rng,SP),eye=pick(rng,EY);
+      let hat=rarity==='common'?'none':pick(rng,HT);
+      let shiny=rng()<0.01;
+      console.log(JSON.stringify({species,rarity,eye,hat,shiny}));
+    " 2>/dev/null)
+
+    if [[ -n "$BONES" ]]; then
+      T_SPECIES=$(echo "$BONES" | python3 -c "import json,sys;print(json.load(sys.stdin)['species'])")
+      T_RARITY=$(echo "$BONES" | python3 -c "import json,sys;print(json.load(sys.stdin)['rarity'])")
+      T_EYE=$(echo "$BONES" | python3 -c "import json,sys;print(json.load(sys.stdin)['eye'])")
+      T_HAT=$(echo "$BONES" | python3 -c "import json,sys;print(json.load(sys.stdin)['hat'])")
+      T_SHINY=$(echo "$BONES" | python3 -c "import json,sys;print(str(json.load(sys.stdin)['shiny']).lower())")
+
+      echo -e "${BLUE}Target: ${T_RARITY} ${T_SPECIES} shiny=${T_SHINY} hat=${T_HAT} eye=${T_EYE}${NC}"
+
+      # Find species variable
+      get_species_code() {
+        case "$1" in
+          duck)echo "100,117,99,107";;goose)echo "103,111,111,115,101";;blob)echo "98,108,111,98";;
+          cat)echo "99,97,116";;dragon)echo "100,114,97,103,111,110";;octopus)echo "111,99,116,111,112,117,115";;
+          owl)echo "111,119,108";;penguin)echo "112,101,110,103,117,105,110";;turtle)echo "116,117,114,116,108,101";;
+          snail)echo "115,110,97,105,108";;ghost)echo "103,104,111,115,116";;axolotl)echo "97,120,111,108,111,116,108";;
+          capybara)echo "99,97,112,121,98,97,114,97";;cactus)echo "99,97,99,116,117,115";;robot)echo "114,111,98,111,116";;
+          rabbit)echo "114,97,98,98,105,116";;mushroom)echo "109,117,115,104,114,111,111,109";;chonk)echo "99,104,111,110,107";;
+        esac
+      }
+
+      SP_CODE=$(get_species_code "$T_SPECIES")
+      # The fromCharCode wrapper function name changes between versions (JD, TD, etc.)
+      # Detect it dynamically
+      CHAR_FUNC=$(grep -oE '[A-Za-z_$]+\(100,117,99,107\)' "$CLI_JS" | head -1 | sed 's/(100,117,99,107)//')
+      SP_VAR=$(grep -oE "[A-Za-z0-9_]+=${CHAR_FUNC}\\(${SP_CODE}\\)" "$CLI_JS" | head -1 | cut -d= -f1)
+
+      # Build stats string
+      if [[ "$WANT_STATS_MAX" == "true" ]]; then
+        STATS_PART="stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
+      else
+        STATS_PART=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1)
       fi
+
+      # Find and patch generation function
+      FUNC_NAME=$(grep -oE 'function [A-Za-z_$]+\(q\)\{let K=[A-Za-z_$]+\(q\);return\{bones:\{rarity:K' "$CLI_JS" | head -1 | grep -oE 'function [A-Za-z_$]+' | sed 's/function //')
+      ORIG_BODY=$(grep -o "function ${FUNC_NAME}(q){[^}]*}" "$CLI_JS" | head -1)
+      REPL_BODY="function ${FUNC_NAME}(q){let K=\"${T_RARITY}\";return{bones:{rarity:K,species:${SP_VAR},eye:\"${T_EYE}\",hat:\"${T_HAT}\",shiny:${T_SHINY},${STATS_PART}}"
+
+      perl -i -pe "
+        BEGIN {
+          \$orig = q|${ORIG_BODY}|;
+          \$repl = q|${REPL_BODY}|;
+        }
+        s/\Q\$orig\E/\$repl/
+      " "$CLI_JS"
+
+      echo -e "${GREEN}Bones generation patched to match target buddy${NC}"
+      [[ "$WANT_STATS_MAX" == "true" ]] && echo -e "${GREEN}Stats maxed to 100!${NC}"
+    else
+      echo -e "${RED}Could not calculate target bones${NC}"
     fi
+  fi
 
-    rm -f "${CLI_JS}.rehatch-state"
+  rm -f "${CLI_JS}.rehatch-state"
 
-    # Show current companion
-    echo ""
-    python3 -c "
+  # Show current companion
+  echo ""
+  python3 -c "
 import json
 data = json.load(open('$CLAUDE_JSON'))
 comp = data.get('companion', {})
@@ -403,7 +477,9 @@ if [[ -z "$SPECIES_CODE" ]]; then
   exit 1
 fi
 
-SPECIES_VAR=$(grep -oE '[A-Za-z0-9_$]+=JD\('"$SPECIES_CODE"'\)' "$CLI_JS" | head -1 | cut -d= -f1)
+# The fromCharCode wrapper function name changes between versions (JD, TD, etc.)
+CHAR_FUNC=$(grep -oE '[A-Za-z_$]+\(100,117,99,107\)' "$CLI_JS" | head -1 | sed 's/(100,117,99,107)//')
+SPECIES_VAR=$(grep -oE "[A-Za-z0-9_]+=${CHAR_FUNC}\\(${SPECIES_CODE}\\)" "$CLI_JS" | head -1 | cut -d= -f1)
 
 if [[ -z "$SPECIES_VAR" ]]; then
   echo -e "${RED}Could not find species variable for '$SPECIES' in cli.js${NC}"
