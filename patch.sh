@@ -217,7 +217,7 @@ lang = '$SET_LANG'
 name = '$SET_NAME'
 detected_species = '$DETECTED_SPECIES'
 
-ZH_PREFIX = '请始终用中文回复。'
+ZH_TAG = '<!-- zh -->'
 
 if lang == 'zh':
     current = comp.get('personality', '')
@@ -225,17 +225,44 @@ if lang == 'zh':
         print('No personality found. Run /buddy first to generate one.')
         sys.exit(1)
 
-    if current.startswith(ZH_PREFIX):
-        print('Already set to Chinese.')
+    if ZH_TAG in current:
+        print('Already in Chinese.')
     else:
-        comp['personality'] = ZH_PREFIX + current
-        print('Chinese mode enabled (official personality preserved).')
+        # Save original English personality for --lang en restore
+        import subprocess
+        # Translate using claude CLI (uses user's existing auth)
+        print('Translating official personality to Chinese via Claude...')
+        import subprocess
+        translated = ''
+        try:
+            prompt = 'Translate the following companion personality description to Chinese. Keep the same tone, humor, and personality vibe. Output ONLY the translated Chinese text, nothing else.\\n\\n' + current
+            result = subprocess.run(
+                ['claude', '-p', prompt, '--model', 'haiku'],
+                capture_output=True, text=True, timeout=60
+            )
+            translated = result.stdout.strip()
+        except Exception as e:
+            print(f'Translation error: {e}')
+
+        if translated and len(translated) > 10:
+            # Store original for restore, save translated
+            comp['personality'] = translated + ' ' + ZH_TAG + current
+            print(f'Translated: {translated}')
+        else:
+            # Fallback: prefix approach
+            comp['personality'] = '请始终用中文回复。' + current
+            print('API translation failed, using prefix fallback.')
 
 elif lang == 'en':
     current = comp.get('personality', '')
-    if current.startswith(ZH_PREFIX):
-        comp['personality'] = current[len(ZH_PREFIX):]
-        print('Chinese mode removed. Buddy will speak English.')
+    if ZH_TAG in current:
+        # Restore original English from after the tag
+        original = current.split(ZH_TAG, 1)[1]
+        comp['personality'] = original
+        print('Restored original English personality.')
+    elif current.startswith('请始终用中文回复。'):
+        comp['personality'] = current[len('请始终用中文回复。'):]
+        print('Removed Chinese prefix.')
     else:
         print('Already in English.')
 
