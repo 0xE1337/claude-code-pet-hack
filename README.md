@@ -45,9 +45,13 @@
 ./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
 
 # 第三步：重启 Claude Code，输入 /buddy 触发孵化动画
+#         ⚠️ 此时宠物显示为英文，这是正常的（官方 hatching 只生成英文）
+#         等孵化动画结束后，关闭 Claude Code
 
-# 第四步：孵化完成后，收尾（恢复 cli.js，保留新宠物数据）
+# 第四步：收尾（恢复 cli.js + 锁定 bones + 翻译中文 + 改名 + 满属性等全部在这一步生效）
 ./patch.sh --finish-rehatch
+
+# 第五步：再次重启 Claude Code，输入 /buddy 查看最终效果 ✅
 ```
 
 可选参数（在 rehatch 时一并设置，finish 时自动生效）：

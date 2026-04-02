@@ -47,9 +47,13 @@ Browse the [Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) to fi
 ./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
 
 # Step 3: Restart Claude Code, type /buddy to trigger hatching
+#         ⚠️ The buddy will appear in English — this is normal (official hatching generates English)
+#         After hatching animation completes, close Claude Code
 
-# Step 4: After hatching completes, finalize (restores cli.js, keeps new companion)
+# Step 4: Finalize (restores cli.js + locks bones + translates + renames + max stats all apply here)
 ./patch.sh --finish-rehatch
+
+# Step 5: Restart Claude Code again, type /buddy to see the final result ✅
 ```
 
 Optional flags (applied automatically during `--finish-rehatch`):
