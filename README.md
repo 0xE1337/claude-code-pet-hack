@@ -33,17 +33,48 @@ The rarest combination is **Shiny Legendary** — 1 in 10,000 chance.
 
 ## Quick Start
 
+### Method 1: Rehatch (Recommended)
+
+Browse the [Buddy Dex](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) to find a buddy you like, then rehatch with its user_id. This gives you an **official API-generated name and personality**.
+
 ```bash
-# One-command patch: Shiny Legendary Dragon with max stats
-./patch.sh
+# Step 1: Browse available buddies
+./patch.sh --browse --species dragon --rarity legendary --shiny
 
-# Custom patch
-./patch.sh --species dragon --rarity legendary --shiny --hat crown --eye "✦" --stats max
+# Step 2: Pick one and rehatch (this patches cli.js temporarily)
+./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
 
-# Only max stats (keep original species/rarity)
+# Step 3: Restart Claude Code, type /buddy to trigger hatching
+
+# Step 4: After hatching completes, finalize (restores cli.js, keeps new companion)
+./patch.sh --finish-rehatch
+```
+
+Want max stats too? Add `--stats max`:
+
+```bash
+./patch.sh --rehatch <user_id> --stats max
+```
+
+### Method 2: Stats Only
+
+Keep your original buddy, just max out all stats:
+
+```bash
 ./patch.sh --stats-only
+```
 
-# Restore original
+### Method 3: Legacy (Direct Patch)
+
+Directly override species/rarity/shiny without official name generation:
+
+```bash
+./patch.sh --legacy --species cat --rarity epic --no-shiny
+```
+
+### Restore
+
+```bash
 ./patch.sh --restore
 ```
 

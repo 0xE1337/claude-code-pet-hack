@@ -31,17 +31,48 @@
 
 ## 快速开始
 
+### 方法一：Rehatch 换宠物（推荐）
+
+从 [Buddy 图鉴](https://claude-buddy-dex-cf.zeke-chin.workers.dev/) 挑一只喜欢的宠物，用它的 user_id 重新孵化。这样能获得**官方 API 生成的名字和性格描述**。
+
 ```bash
-# 一键修改：闪光传说龙 + 满属性
-./patch.sh
+# 第一步：浏览可选宠物
+./patch.sh --browse --species dragon --rarity legendary --shiny
 
-# 自定义修改
-./patch.sh --species dragon --rarity legendary --shiny --hat crown --eye "✦" --stats max
+# 第二步：选一只，开始 rehatch（临时修改 cli.js）
+./patch.sh --rehatch 7173a7ad798d411eaec58752cd724ece82c5498b2cd70892ad27636a11a42c90
 
-# 只改属性（保留原物种和稀有度）
+# 第三步：重启 Claude Code，输入 /buddy 触发孵化动画
+
+# 第四步：孵化完成后，收尾（恢复 cli.js，保留新宠物数据）
+./patch.sh --finish-rehatch
+```
+
+想要满属性？加 `--stats max`：
+
+```bash
+./patch.sh --rehatch <user_id> --stats max
+```
+
+### 方法二：只改属性
+
+保留原宠物，只把属性拉满：
+
+```bash
 ./patch.sh --stats-only
+```
 
-# 恢复原始
+### 方法三：Legacy 直接 Patch
+
+直接覆盖物种/稀有度/闪光，不走官方名字生成：
+
+```bash
+./patch.sh --legacy --species cat --rarity epic --no-shiny
+```
+
+### 恢复原始
+
+```bash
 ./patch.sh --restore
 ```
 

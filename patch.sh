@@ -1,20 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Claude Code Buddy Patcher
+# Claude Code Buddy Patcher v2.0.0
 # Customize your Claude Code terminal companion
 
-VERSION="1.0.0"
+VERSION="2.0.0"
+DEX_API="https://claude-buddy-dex-cf.zeke-chin.workers.dev/api"
 
 # --- Defaults ---
-SPECIES="dragon"
-RARITY="legendary"
-SHINY="true"
-HAT="crown"
-EYE="✦"
-STATS_MAX=true
+SPECIES=""
+RARITY=""
+SHINY=""
+HAT=""
+EYE=""
+STATS_MAX=false
 STATS_ONLY=false
 RESTORE=false
+REHATCH=false
+USER_ID=""
+BROWSE=false
 
 # --- Colors ---
 RED='\033[0;31m'
@@ -29,39 +33,57 @@ usage() {
   cat <<EOF
 Claude Code Buddy Patcher v${VERSION}
 
-Usage: ./patch.sh [OPTIONS]
+Usage: ./patch.sh [MODE] [OPTIONS]
 
-Options:
+Modes:
+  ./patch.sh --rehatch <user_id>     Switch to a different buddy with official API-generated
+                                     name and personality (recommended method)
+  ./patch.sh --browse                Browse the buddy dex to find your dream companion
+  ./patch.sh --stats-only            Only max out stats, keep everything else
+  ./patch.sh --restore               Restore original cli.js from backup
+
+Rehatch Options (use with --rehatch):
+  --stats max                        Also max out all stats to 100 after rehatch
+
+Browse Options (use with --browse):
+  --species <name>                   Filter by species
+  --rarity <level>                   Filter by rarity
+  --shiny                            Filter shiny only
+
+Legacy Mode (direct bones patch, no official name/personality):
+  ./patch.sh --legacy [OPTIONS]      Patch bones directly without rehatch
+
+Legacy Options:
   --species <name>    Set species (default: dragon)
                       Available: duck, goose, blob, cat, dragon, octopus, owl,
                       penguin, turtle, snail, ghost, axolotl, capybara, cactus,
                       robot, rabbit, mushroom, chonk
   --rarity <level>    Set rarity (default: legendary)
                       Available: common, uncommon, rare, epic, legendary
-  --shiny             Enable shiny effect (default: on)
-  --no-shiny          Disable shiny effect
-  --hat <name>        Set hat (default: crown)
-                      Available: none, crown, tophat, propeller, halo, wizard, beanie, tinyduck
-  --eye <char>        Set eye character (default: ✦)
-                      Available: · ✦ × ◉ @ °
-  --stats max         Set all stats to 100 (default)
-  --stats keep        Keep original stats generation
-  --stats-only        Only patch stats, keep everything else original
-  --restore           Restore from backup
-  --help              Show this help
+  --shiny / --no-shiny
+  --hat <name>        Available: none, crown, tophat, propeller, halo, wizard, beanie, tinyduck
+  --eye <char>        Available: · ✦ × ◉ @ °
+  --stats max|keep    Set all stats to 100 or keep original
 
 Examples:
-  ./patch.sh                                          # Shiny Legendary Dragon, all stats 100
-  ./patch.sh --species cat --rarity epic --no-shiny   # Epic Cat, no shiny
-  ./patch.sh --stats-only                             # Only max stats, keep original pet
-  ./patch.sh --restore                                # Restore original
+  ./patch.sh --browse --species dragon --rarity legendary --shiny
+  ./patch.sh --rehatch 7173a7ad...
+  ./patch.sh --rehatch 7173a7ad... --stats max
+  ./patch.sh --stats-only
+  ./patch.sh --restore
+  ./patch.sh --legacy --species cat --rarity epic
 EOF
   exit 0
 }
 
+LEGACY=false
+
 # --- Parse args ---
 while [[ $# -gt 0 ]]; do
   case $1 in
+    --rehatch) REHATCH=true; USER_ID="$2"; shift 2 ;;
+    --browse) BROWSE=true; shift ;;
+    --legacy) LEGACY=true; shift ;;
     --species) SPECIES="$2"; shift 2 ;;
     --rarity) RARITY="$2"; shift 2 ;;
     --shiny) SHINY="true"; shift ;;
@@ -69,7 +91,7 @@ while [[ $# -gt 0 ]]; do
     --hat) HAT="$2"; shift 2 ;;
     --eye) EYE="$2"; shift 2 ;;
     --stats)
-      if [[ "$2" == "keep" ]]; then STATS_MAX=false; fi
+      if [[ "$2" == "max" ]]; then STATS_MAX=true; else STATS_MAX=false; fi
       shift 2 ;;
     --stats-only) STATS_ONLY=true; shift ;;
     --restore) RESTORE=true; shift ;;
@@ -80,7 +102,6 @@ done
 
 # --- Find cli.js ---
 find_cli_js() {
-  # Method 1: npm global root
   local npm_root
   npm_root="$(npm root -g 2>/dev/null)" || true
   if [[ -f "${npm_root}/@anthropic-ai/claude-code/cli.js" ]]; then
@@ -88,7 +109,6 @@ find_cli_js() {
     return
   fi
 
-  # Method 2: which claude -> resolve symlink
   local claude_bin
   claude_bin="$(which claude 2>/dev/null)" || true
   if [[ -n "$claude_bin" ]]; then
@@ -102,7 +122,6 @@ find_cli_js() {
     fi
   fi
 
-  # Method 3: common nvm paths
   local nvm_path
   for nvm_path in ~/.nvm/versions/node/*/lib/node_modules/@anthropic-ai/claude-code/cli.js; do
     if [[ -f "$nvm_path" ]]; then
@@ -124,40 +143,197 @@ fi
 
 echo -e "${BLUE}Found cli.js:${NC} $CLI_JS"
 
-# --- Restore ---
+CLAUDE_JSON="$HOME/.claude.json"
+
+# ============================================================
+# MODE: Restore
+# ============================================================
 if [[ "$RESTORE" == "true" ]]; then
   if [[ -f "${CLI_JS}.backup" ]]; then
     cp "${CLI_JS}.backup" "$CLI_JS"
-    echo -e "${GREEN}Restored from backup.${NC}"
+    echo -e "${GREEN}cli.js restored from backup.${NC}"
   else
-    echo -e "${RED}No backup found at ${CLI_JS}.backup${NC}"
-    exit 1
+    echo -e "${YELLOW}No cli.js backup found (already original).${NC}"
+  fi
+  if [[ -f "${CLAUDE_JSON}.buddy-backup" ]]; then
+    cp "${CLAUDE_JSON}.buddy-backup" "$CLAUDE_JSON"
+    echo -e "${GREEN}.claude.json restored from backup.${NC}"
   fi
   exit 0
 fi
 
-# --- Backup ---
-if [[ ! -f "${CLI_JS}.backup" ]]; then
-  cp "$CLI_JS" "${CLI_JS}.backup"
-  echo -e "${GREEN}Backup created.${NC}"
-else
-  # Always restore from backup before patching to avoid double-patch
-  cp "${CLI_JS}.backup" "$CLI_JS"
-  echo -e "${YELLOW}Restored from existing backup before re-patching.${NC}"
+# ============================================================
+# MODE: Browse dex
+# ============================================================
+if [[ "$BROWSE" == "true" ]]; then
+  if ! command -v curl &>/dev/null; then
+    echo -e "${RED}curl is required for --browse${NC}"
+    exit 1
+  fi
+
+  QUERY="limit=10&offset=0"
+  [[ -n "$SPECIES" ]] && QUERY="${QUERY}&species=${SPECIES}"
+  [[ -n "$RARITY" ]] && QUERY="${QUERY}&rarity=${RARITY}"
+  [[ "$SHINY" == "true" ]] && QUERY="${QUERY}&shiny=1"
+
+  echo -e "${BLUE}Fetching from buddy dex...${NC}"
+  RESULT=$(curl -s "${DEX_API}/buddies?${QUERY}")
+
+  TOTAL=$(echo "$RESULT" | python3 -c "import json,sys; print(json.load(sys.stdin)['total'])" 2>/dev/null || echo "0")
+  echo -e "${GREEN}Found ${TOTAL} buddies matching your criteria${NC}"
+  echo ""
+
+  echo "$RESULT" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+for i, b in enumerate(data.get('buddies', []), 1):
+    stats = b['stats']
+    total = sum(stats.values())
+    shiny = ' ✨SHINY' if b['shiny'] else ''
+    print(f\"  {i}. {b['rarity'].upper()} {b['species'].upper()}{shiny}  hat={b['hat']} eye={b['eye']}  total_stats={total}\")
+    print(f\"     user_id={b['user_id']}\")
+    print()
+" 2>/dev/null
+
+  echo -e "${YELLOW}To use a buddy: ./patch.sh --rehatch <user_id>${NC}"
+  echo -e "${YELLOW}Add --stats max to also max out all stats${NC}"
+  exit 0
 fi
 
-# --- Stats-only patch ---
-if [[ "$STATS_ONLY" == "true" ]]; then
-  # Find the stats call pattern: stats:XX_(q,K)
-  if grep -q 'stats:Dk_(q,K)' "$CLI_JS" 2>/dev/null; then
-    STATS_FUNC="Dk_"
-  else
-    # Dynamic detection: find function that generates stats with DEBUGGING etc
-    STATS_FUNC=$(grep -oE '[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1 | sed 's/(q,K)//')
-    if [[ -z "$STATS_FUNC" ]]; then
-      echo -e "${RED}Could not locate stats function.${NC}"
+# ============================================================
+# MODE: Rehatch (recommended)
+# ============================================================
+if [[ "$REHATCH" == "true" ]]; then
+  if [[ -z "$USER_ID" ]]; then
+    echo -e "${RED}Usage: ./patch.sh --rehatch <user_id>${NC}"
+    echo "Find user_ids with: ./patch.sh --browse --species dragon --rarity legendary --shiny"
+    exit 1
+  fi
+
+  echo -e "${BLUE}Rehatch mode: switching to buddy from user_id${NC}"
+  echo -e "${BLUE}user_id:${NC} $USER_ID"
+
+  # Backup
+  [[ ! -f "${CLI_JS}.backup" ]] && cp "$CLI_JS" "${CLI_JS}.backup"
+  cp "$CLAUDE_JSON" "${CLAUDE_JSON}.buddy-backup"
+  echo -e "${GREEN}Backups created${NC}"
+
+  # Find and patch RR1() function
+  ORIG_RR1=$(grep -o 'function RR1(){[^}]*}' "$CLI_JS" | head -1)
+  if [[ -z "$ORIG_RR1" ]]; then
+    echo -e "${RED}Could not find RR1() function in cli.js${NC}"
+    exit 1
+  fi
+
+  REPL_RR1="function RR1(){return \"${USER_ID}\"}"
+
+  perl -i -pe "
+    BEGIN {
+      \$orig = q|${ORIG_RR1}|;
+      \$repl = q|${REPL_RR1}|;
+    }
+    s/\Q\$orig\E/\$repl/
+  " "$CLI_JS"
+
+  echo -e "${GREEN}RR1() patched to return target user_id${NC}"
+
+  # Delete companion to trigger rehatch
+  python3 -c "
+import json
+f = '$CLAUDE_JSON'
+data = json.load(open(f))
+if 'companion' in data:
+    del data['companion']
+    json.dump(data, open(f, 'w'), ensure_ascii=False)
+    print('Companion data cleared')
+else:
+    print('No existing companion (clean)')
+"
+
+  echo ""
+  echo -e "${GOLD}╔══════════════════════════════════════════════════╗${NC}"
+  echo -e "${GOLD}║  Now restart Claude Code and type /buddy         ║${NC}"
+  echo -e "${GOLD}║  to trigger hatching with official API name.     ║${NC}"
+  echo -e "${GOLD}║                                                  ║${NC}"
+  echo -e "${GOLD}║  After hatching, run:                            ║${NC}"
+  echo -e "${GOLD}║    ./patch.sh --finish-rehatch                   ║${NC}"
+  if [[ "$STATS_MAX" == "true" ]]; then
+  echo -e "${GOLD}║                                                  ║${NC}"
+  echo -e "${GOLD}║  Stats will be maxed out in the finish step.     ║${NC}"
+  fi
+  echo -e "${GOLD}╚══════════════════════════════════════════════════╝${NC}"
+
+  # Save state for --finish-rehatch
+  echo "$USER_ID" > "${CLI_JS}.rehatch-state"
+  [[ "$STATS_MAX" == "true" ]] && echo "stats_max" >> "${CLI_JS}.rehatch-state"
+
+  exit 0
+fi
+
+# ============================================================
+# MODE: Finish rehatch (restore RR1, optionally max stats)
+# ============================================================
+if [[ "${1:-}" == "--finish-rehatch" ]] 2>/dev/null || false; then
+  true  # handled below
+fi
+
+# Check for --finish-rehatch anywhere in args
+for arg in "$@" "${1:-}"; do
+  if [[ "$arg" == "--finish-rehatch" ]]; then
+    if [[ ! -f "${CLI_JS}.backup" ]]; then
+      echo -e "${RED}No backup found. Did you run --rehatch first?${NC}"
       exit 1
     fi
+
+    # Restore cli.js
+    cp "${CLI_JS}.backup" "$CLI_JS"
+    echo -e "${GREEN}cli.js restored (RR1 back to original)${NC}"
+
+    # Check if stats max was requested
+    if [[ -f "${CLI_JS}.rehatch-state" ]] && grep -q "stats_max" "${CLI_JS}.rehatch-state" 2>/dev/null; then
+      echo -e "${BLUE}Applying max stats...${NC}"
+      STATS_FUNC=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1 | sed 's/stats://' | sed 's/(q,K)//')
+      if [[ -n "$STATS_FUNC" ]]; then
+        sed -i.tmp "s/stats:${STATS_FUNC}(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/" "$CLI_JS"
+        rm -f "${CLI_JS}.tmp"
+        echo -e "${GREEN}Stats maxed to 100!${NC}"
+      fi
+    fi
+
+    rm -f "${CLI_JS}.rehatch-state"
+
+    # Show current companion
+    echo ""
+    python3 -c "
+import json
+data = json.load(open('$CLAUDE_JSON'))
+comp = data.get('companion', {})
+if comp:
+    print(f\"  Name:        {comp.get('name', '?')}\")
+    print(f\"  Personality: {comp.get('personality', '?')[:80]}...\")
+    print()
+    print('  Rehatch complete! Your buddy has an official API-generated identity.')
+else:
+    print('  Warning: No companion data found. Did you run /buddy after --rehatch?')
+" 2>/dev/null
+
+    echo ""
+    echo -e "${YELLOW}Restart Claude Code to see your new companion!${NC}"
+    exit 0
+  fi
+done
+
+# ============================================================
+# MODE: Stats-only
+# ============================================================
+if [[ "$STATS_ONLY" == "true" ]]; then
+  [[ ! -f "${CLI_JS}.backup" ]] && cp "$CLI_JS" "${CLI_JS}.backup"
+  [[ -f "${CLI_JS}.backup" ]] && cp "${CLI_JS}.backup" "$CLI_JS"
+
+  STATS_FUNC=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1 | sed 's/stats://' | sed 's/(q,K)//')
+  if [[ -z "$STATS_FUNC" ]]; then
+    echo -e "${RED}Could not locate stats function.${NC}"
+    exit 1
   fi
 
   sed -i.tmp "s/stats:${STATS_FUNC}(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/" "$CLI_JS"
@@ -168,8 +344,39 @@ if [[ "$STATS_ONLY" == "true" ]]; then
   exit 0
 fi
 
+# ============================================================
+# MODE: Legacy (direct bones patch)
+# ============================================================
+if [[ "$LEGACY" != "true" ]]; then
+  # No mode specified, show usage
+  echo -e "${YELLOW}No mode specified. Use one of:${NC}"
+  echo ""
+  echo "  ./patch.sh --browse                    # Find a buddy from the dex"
+  echo "  ./patch.sh --rehatch <user_id>         # Switch to a buddy with official name"
+  echo "  ./patch.sh --stats-only                # Just max out stats"
+  echo "  ./patch.sh --legacy                    # Direct patch (no official name)"
+  echo "  ./patch.sh --restore                   # Restore original"
+  echo "  ./patch.sh --help                      # Full help"
+  exit 0
+fi
+
+# Legacy mode defaults
+[[ -z "$SPECIES" ]] && SPECIES="dragon"
+[[ -z "$RARITY" ]] && RARITY="legendary"
+[[ -z "$SHINY" ]] && SHINY="true"
+[[ -z "$HAT" ]] && HAT="crown"
+[[ -z "$EYE" ]] && EYE="✦"
+
+# --- Backup ---
+if [[ ! -f "${CLI_JS}.backup" ]]; then
+  cp "$CLI_JS" "${CLI_JS}.backup"
+  echo -e "${GREEN}Backup created.${NC}"
+else
+  cp "${CLI_JS}.backup" "$CLI_JS"
+  echo -e "${YELLOW}Restored from existing backup before re-patching.${NC}"
+fi
+
 # --- Find species variable name ---
-# Species are encoded as String.fromCharCode calls
 get_species_code() {
   case "$1" in
     duck)     echo "100,117,99,107" ;;
@@ -201,12 +408,10 @@ if [[ -z "$SPECIES_CODE" ]]; then
   exit 1
 fi
 
-# Find the variable name for this species
 SPECIES_VAR=$(grep -oE '[A-Za-z0-9_$]+=JD\('"$SPECIES_CODE"'\)' "$CLI_JS" | head -1 | cut -d= -f1)
 
 if [[ -z "$SPECIES_VAR" ]]; then
   echo -e "${RED}Could not find species variable for '$SPECIES' in cli.js${NC}"
-  echo "The code structure may have changed. Try updating this script."
   exit 1
 fi
 
@@ -217,29 +422,23 @@ GEN_FUNC=$(grep -oE 'function [A-Za-z_$]+\(q\)\{let K=[A-Za-z_$]+\(q\);return\{b
 
 if [[ -z "$GEN_FUNC" ]]; then
   echo -e "${RED}Could not locate buddy generation function.${NC}"
-  echo "The code structure may have changed in this version."
   exit 1
 fi
 
-# Extract function name
 FUNC_NAME=$(echo "$GEN_FUNC" | grep -oE 'function [A-Za-z_$]+' | sed 's/function //')
-# Extract rarity function name
-RARITY_FUNC=$(echo "$GEN_FUNC" | grep -oE 'let K=[A-Za-z_$]+' | sed 's/let K=//')
+RARITY_FUNC_NAME=$(echo "$GEN_FUNC" | grep -oE 'let K=[A-Za-z_$]+' | sed 's/let K=//')
 
 echo -e "${BLUE}Generation function:${NC} $FUNC_NAME"
-echo -e "${BLUE}Rarity function:${NC} $RARITY_FUNC"
 
 # --- Build stats string ---
 if [[ "$STATS_MAX" == "true" ]]; then
   STATS_STR="stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
 else
-  # Find the original stats function call
   STATS_FUNC=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1)
   STATS_STR="$STATS_FUNC"
 fi
 
-# --- Extract the original function body to build exact match ---
-# Get the full original bones section from the generation function
+# --- Patch ---
 ORIG_BODY=$(grep -o "function ${FUNC_NAME}(q){[^}]*}" "$CLI_JS" | head -1)
 
 if [[ -z "$ORIG_BODY" ]]; then
@@ -247,12 +446,8 @@ if [[ -z "$ORIG_BODY" ]]; then
   exit 1
 fi
 
-echo -e "${BLUE}Original function found${NC}"
-
-# --- Build replacement ---
 REPL_BODY="function ${FUNC_NAME}(q){let K=\"${RARITY}\";return{bones:{rarity:K,species:${SPECIES_VAR},eye:\"${EYE}\",hat:\"${HAT}\",shiny:${SHINY},${STATS_STR}}"
 
-# --- Apply patch using perl \Q...\E for literal matching ---
 perl -i -pe "
   BEGIN {
     \$orig = q|${ORIG_BODY}|;
@@ -289,6 +484,4 @@ if echo "$RESULT" | grep -q "\"${RARITY}\""; then
 else
   echo -e "${RED}Patch may not have applied correctly.${NC}"
   echo "Result: $RESULT"
-  echo ""
-  echo "Try restoring and patching again: ./patch.sh --restore && ./patch.sh"
 fi
