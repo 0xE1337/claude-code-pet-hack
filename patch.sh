@@ -15,6 +15,7 @@ HAT=""
 EYE=""
 STATS_MAX=false
 STATS_ONLY=false
+STATS_CUSTOM=""
 RESTORE=false
 REHATCH=false
 USER_ID=""
@@ -31,6 +32,24 @@ BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 GOLD='\033[1;33m'
 NC='\033[0m'
+
+# Build stats string from various input formats
+build_stats_str() {
+  if [[ "$STATS_MAX" == "true" ]]; then
+    echo "stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
+  elif [[ -n "$STATS_CUSTOM" ]]; then
+    # Parse custom stats: "90,80,70,100,85" or "D90P80C70W100S85"
+    if echo "$STATS_CUSTOM" | grep -q ','; then
+      IFS=',' read -r S_D S_P S_C S_W S_S <<< "$STATS_CUSTOM"
+      echo "stats:{DEBUGGING:${S_D},PATIENCE:${S_P},CHAOS:${S_C},WISDOM:${S_W},SNARK:${S_S}}"
+    else
+      echo -e "${RED}Invalid stats format. Use: 90,80,70,100,85 (DEBUGGING,PATIENCE,CHAOS,WISDOM,SNARK)${NC}" >&2
+      return 1
+    fi
+  else
+    echo ""  # empty means keep original
+  fi
+}
 
 usage() {
   cat <<EOF
@@ -66,7 +85,10 @@ Legacy Options:
   --shiny / --no-shiny
   --hat <name>        Available: none, crown, tophat, propeller, halo, wizard, beanie, tinyduck
   --eye <char>        Available: · ✦ × ◉ @ °
-  --stats max|keep    Set all stats to 100 or keep original
+  --stats max         Set all stats to 100
+  --stats keep        Keep original stats
+  --stats D,P,C,W,S   Custom values (e.g. --stats 90,80,70,100,85)
+                      Order: DEBUGGING,PATIENCE,CHAOS,WISDOM,SNARK
 
 Personality Options:
   --lang zh                          Switch buddy personality to Chinese (auto-detects species)
@@ -102,7 +124,15 @@ while [[ $# -gt 0 ]]; do
     --hat) HAT="$2"; shift 2 ;;
     --eye) EYE="$2"; shift 2 ;;
     --stats)
-      if [[ "$2" == "max" ]]; then STATS_MAX=true; else STATS_MAX=false; fi
+      if [[ "$2" == "max" ]]; then
+        STATS_MAX=true
+      elif [[ "$2" == "keep" ]]; then
+        STATS_MAX=false
+      else
+        # Custom format: "90,80,70,100,85" (DEBUGGING,PATIENCE,CHAOS,WISDOM,SNARK)
+        STATS_CUSTOM="$2"
+        STATS_MAX=false
+      fi
       shift 2 ;;
     --stats-only) STATS_ONLY=true; shift ;;
     --restore) RESTORE=true; shift ;;
@@ -408,6 +438,7 @@ else:
   # Save state for --finish-rehatch
   echo "$USER_ID" > "${CLI_JS}.rehatch-state"
   [[ "$STATS_MAX" == "true" ]] && echo "stats_max" >> "${CLI_JS}.rehatch-state"
+  [[ -n "$STATS_CUSTOM" ]] && echo "stats_custom:${STATS_CUSTOM}" >> "${CLI_JS}.rehatch-state"
   [[ "$SET_LANG" == "zh" ]] && echo "lang_zh" >> "${CLI_JS}.rehatch-state"
   [[ -n "$SET_NAME" ]] && echo "name:${SET_NAME}" >> "${CLI_JS}.rehatch-state"
 
@@ -488,8 +519,12 @@ if [[ "$FINISH_REHATCH" == "true" ]]; then
       SP_VAR=$(grep -oE "[A-Za-z0-9_]+=${CHAR_FUNC}\\(${SP_CODE}\\)" "$CLI_JS" | head -1 | cut -d= -f1)
 
       # Build stats string
+      WANT_STATS_CUSTOM=$(grep -o 'stats_custom:.*' "${CLI_JS}.rehatch-state" 2>/dev/null | sed 's/stats_custom://' || true)
       if [[ "$WANT_STATS_MAX" == "true" ]]; then
         STATS_PART="stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
+      elif [[ -n "$WANT_STATS_CUSTOM" ]]; then
+        IFS=',' read -r S_D S_P S_C S_W S_S <<< "$WANT_STATS_CUSTOM"
+        STATS_PART="stats:{DEBUGGING:${S_D},PATIENCE:${S_P},CHAOS:${S_C},WISDOM:${S_W},SNARK:${S_S}}"
       else
         STATS_PART=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1)
       fi
@@ -584,10 +619,15 @@ if [[ "$STATS_ONLY" == "true" ]]; then
     exit 1
   fi
 
-  sed -i.tmp "s/stats:${STATS_FUNC}(q,K)/stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}/" "$CLI_JS"
+  STATS_STR=$(build_stats_str)
+  if [[ -z "$STATS_STR" ]]; then
+    STATS_STR="stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
+  fi
+  STATS_VAL=$(echo "$STATS_STR" | sed 's/stats://')
+  sed -i.tmp "s/stats:${STATS_FUNC}(q,K)/stats:${STATS_VAL}/" "$CLI_JS"
   rm -f "${CLI_JS}.tmp"
 
-  echo -e "${GREEN}Stats patched to all 100.${NC}"
+  echo -e "${GREEN}Stats patched: ${STATS_STR}${NC}"
   echo -e "${YELLOW}Restart Claude Code and type /buddy to verify.${NC}"
   exit 0
 fi
@@ -681,8 +721,9 @@ RARITY_FUNC_NAME=$(echo "$GEN_FUNC" | grep -oE 'let K=[A-Za-z_$]+' | sed 's/let 
 echo -e "${BLUE}Generation function:${NC} $FUNC_NAME"
 
 # --- Build stats string ---
-if [[ "$STATS_MAX" == "true" ]]; then
-  STATS_STR="stats:{DEBUGGING:100,PATIENCE:100,CHAOS:100,WISDOM:100,SNARK:100}"
+STATS_STR=$(build_stats_str)
+if [[ -n "$STATS_STR" ]]; then
+  true  # custom or max stats
 else
   STATS_FUNC=$(grep -oE 'stats:[A-Za-z_$]+\(q,K\)' "$CLI_JS" | head -1)
   STATS_STR="$STATS_FUNC"
@@ -726,6 +767,8 @@ if echo "$RESULT" | grep -q "\"${RARITY}\""; then
   echo -e "  Eye:      ${EYE}"
   if [[ "$STATS_MAX" == "true" ]]; then
     echo -e "  Stats:    ${GREEN}ALL 100${NC}"
+  elif [[ -n "$STATS_CUSTOM" ]]; then
+    echo -e "  Stats:    ${GREEN}${STATS_CUSTOM}${NC}"
   else
     echo -e "  Stats:    original"
   fi

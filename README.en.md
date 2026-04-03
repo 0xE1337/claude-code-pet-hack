@@ -62,6 +62,7 @@ Optional flags for Step 2 (add as needed, none are required):
 | Flag | Effect | Example |
 |------|--------|---------|
 | `--stats max` | Max all 5 stats to 100 | `./patch.sh --rehatch <id> --stats max` |
+| `--stats D,P,C,W,S` | Custom stat values (DEBUGGING,PATIENCE,CHAOS,WISDOM,SNARK) | `./patch.sh --rehatch <id> --stats 90,80,70,100,85` |
 | `--lang zh` | Translate official description to Chinese | `./patch.sh --rehatch <id> --lang zh` |
 | `--name "name"` | Rename your buddy | `./patch.sh --rehatch <id> --name "DragonFire"` |
 

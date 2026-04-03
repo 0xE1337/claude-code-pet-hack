@@ -60,6 +60,7 @@
 | 参数 | 作用 | 示例 |
 |------|------|------|
 | `--stats max` | 五项属性拉满到 100 | `./patch.sh --rehatch <id> --stats max` |
+| `--stats D,P,C,W,S` | 自定义属性值（顺序：调试,耐心,混乱,智慧,毒舌） | `./patch.sh --rehatch <id> --stats 90,80,70,100,85` |
 | `--lang zh` | 将官方描述翻译为中文 | `./patch.sh --rehatch <id> --lang zh` |
 | `--name "名字"` | 给宠物改名 | `./patch.sh --rehatch <id> --name "龙小火"` |
 
