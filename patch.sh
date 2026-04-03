@@ -347,14 +347,27 @@ if [[ "$REHATCH" == "true" ]]; then
   cp "$CLAUDE_JSON" "${CLAUDE_JSON}.buddy-backup"
   echo -e "${GREEN}Backups created${NC}"
 
-  # Find and patch RR1() function
-  ORIG_RR1=$(grep -o 'function RR1(){[^}]*}' "$CLI_JS" | head -1)
+  # Find userid function by its unique body (name changes between versions: RR1, $S1, etc.)
+  # The body always contains: accountUuid??q.userID??"anon"
+  BYTE_OFF=$(grep -b -o 'accountUuid??q.userID' "$CLI_JS" | head -1 | cut -d: -f1 || true)
+  if [[ -z "$BYTE_OFF" ]]; then
+    echo -e "${RED}Could not find userid function in cli.js${NC}"
+    exit 1
+  fi
+  # Extract the function that contains accountUuid??q.userID??"anon"
+  START=$((BYTE_OFF - 60))
+  CHUNK=$(dd if="$CLI_JS" bs=1 skip=$START count=120 2>/dev/null)
+  # Match: function NAME(){...accountUuid??q.userID??"anon"}
+  ORIG_RR1=$(echo "$CHUNK" | grep -oE 'function [^(]+\(\)\{[^}]*userID[^}]*\}' | head -1 || true)
   if [[ -z "$ORIG_RR1" ]]; then
-    echo -e "${RED}Could not find RR1() function in cli.js${NC}"
+    echo -e "${RED}Could not extract userid function${NC}"
     exit 1
   fi
 
-  REPL_RR1="function RR1(){return \"${USER_ID}\"}"
+  # Extract function name (may contain $ like $S1)
+  UID_FUNC_NAME=$(echo "$ORIG_RR1" | sed 's/function //' | sed 's/(.*//')
+  REPL_RR1="function ${UID_FUNC_NAME}(){return \"${USER_ID}\"}"
+  echo -e "${BLUE}Found userid function:${NC} $UID_FUNC_NAME"
 
   perl -i -pe "
     BEGIN {
